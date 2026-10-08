@@ -30,7 +30,9 @@ macro(SETUP_HIFI_PLUGIN)
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /DEBUG")
     endif()
 
-    if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_GENERATOR STREQUAL "Unix Makefiles")
+    # Single-config generators (Makefiles, Ninja) have no per-configuration output directory.
+    get_property(_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+    if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR NOT _IS_MULTI_CONFIG)
         set(PLUGIN_FULL_PATH "${CMAKE_BINARY_DIR}/interface/${PLUGIN_PATH}/")
     else()
         set(PLUGIN_FULL_PATH "${CMAKE_BINARY_DIR}/interface/$<CONFIGURATION>/${PLUGIN_PATH}/")

@@ -1,0 +1,23 @@
+include(default)
+
+[settings]
+# Both libnode and webrtc-audio-processing require C++20
+compiler.cppstd=gnu20
+
+[options]
+# Required for building oneTBB.
+hwloc/*:shared=True
+
+# glad must be a shared library on macOS. With static glad, libgl and libdisplay-plugins each get
+# their own table of GL function pointers (two-level namespace) and only libgl's copy gets loaded,
+# so the first GL call from Interface jumps to a null pointer.
+glad/*:shared=True
+
+# Options required for building Qt from source (-o 'Overte/*:qt_source=source').
+# Qt WebEngine's build also needs a `python`/`python3` on PATH with the html5lib module.
+qt*:with_mysql=False
+qt*:with_pq=False
+qt*:with_odbc=False
+nss*:shared=True
+nspr*:shared=True
+sqlite3*:shared=True

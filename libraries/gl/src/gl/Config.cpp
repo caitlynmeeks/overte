@@ -10,6 +10,7 @@
 //
 
 #include "Config.h"
+#include "GLLogging.h"
 
 #include <mutex>
 
@@ -107,8 +108,15 @@ static void* (*getGlProcessAddress)(const char *namez) = nullptr;
 
 
 void gl::initModuleGl() {
-    static std::once_flag once;
-    std::call_once(once, [] {
+    // Not std::call_once: glad's loader gives up when no GL context is current (it loads only
+    // glGetString), and a failed load must not count as done or every later GL call is a null pointer.
+    static std::mutex mutex;
+    static bool loaded = false;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (loaded) {
+        return;
+    }
+
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
     contextIsEGL = eglGetCurrentContext() != nullptr;
 
@@ -120,27 +128,32 @@ void gl::initModuleGl() {
 #endif
 
 #if defined(Q_OS_WIN)
-        wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)getGlProcessAddress("wglSwapIntervalEXT");
-        wglGetSwapIntervalEXT = (PFNWGLGETSWAPINTERVALEXTPROC)getGlProcessAddress("wglGetSwapIntervalEXT");
-        wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)getGlProcessAddress("wglChoosePixelFormatARB");
-        wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)getGlProcessAddress("wglCreateContextAttribsARB");
+    wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)getGlProcessAddress("wglSwapIntervalEXT");
+    wglGetSwapIntervalEXT = (PFNWGLGETSWAPINTERVALEXTPROC)getGlProcessAddress("wglGetSwapIntervalEXT");
+    wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)getGlProcessAddress("wglChoosePixelFormatARB");
+    wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)getGlProcessAddress("wglCreateContextAttribsARB");
 #endif
 
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-        if (!contextIsEGL) {
-            QueryCurrentRendererIntegerMESA = (PFNGLXQUERYCURRENTRENDERERINTEGERMESAPROC)getGlProcessAddress("glXQueryCurrentRendererIntegerMESA");
-            SwapIntervalMESA = (PFNGLXSWAPINTERVALMESAPROC)getGlProcessAddress("glXSwapIntervalMESA");
-            GetSwapIntervalMESA = (PFNGLXGETSWAPINTERVALMESAPROC)getGlProcessAddress("glXGetSwapIntervalMESA");
-        }
+    if (!contextIsEGL) {
+        QueryCurrentRendererIntegerMESA = (PFNGLXQUERYCURRENTRENDERERINTEGERMESAPROC)getGlProcessAddress("glXQueryCurrentRendererIntegerMESA");
+        SwapIntervalMESA = (PFNGLXSWAPINTERVALMESAPROC)getGlProcessAddress("glXSwapIntervalMESA");
+        GetSwapIntervalMESA = (PFNGLXGETSWAPINTERVALMESAPROC)getGlProcessAddress("glXGetSwapIntervalMESA");
+    }
 #endif
 
-        auto backendApi = hifi::properties::getGraphicsAPI();
-        if (backendApi == hifi::properties::GraphicsAPI::GLES32) {
-            gladLoadGLES2Loader(getGlProcessAddress);
-        } else {
-            gladLoadGLLoader(getGlProcessAddress);
-        }
-    });
+    auto backendApi = hifi::properties::getGraphicsAPI();
+    int result;
+    if (backendApi == hifi::properties::GraphicsAPI::GLES32) {
+        result = gladLoadGLES2Loader(getGlProcessAddress);
+    } else {
+        result = gladLoadGLLoader(getGlProcessAddress);
+    }
+    if (!result) {
+        qCWarning(glLogging) << "Failed to load the OpenGL entry points (no current GL context?); will retry on the next makeCurrent";
+        return;
+    }
+    loaded = true;
 }
 
 int gl::getSwapInterval() {

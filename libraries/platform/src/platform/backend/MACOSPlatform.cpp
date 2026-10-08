@@ -17,7 +17,6 @@
 
 #ifdef Q_OS_MAC
 #include <unistd.h>
-#include <cpuid.h>
 #include <sys/sysctl.h>
 
 #include <sstream>
@@ -35,8 +34,22 @@ using namespace platform;
 void MACOSInstance::enumerateCpus() {
     json cpu = {};
 
+#if defined(Q_OS_MAC) && defined(__aarch64__)
+    // Apple Silicon has no cpuid instruction; read the brand string from sysctl instead.
+    cpu[keys::cpu::vendor] = keys::computer::vendor_Apple;
+    size_t len = 0;
+    sysctlbyname("machdep.cpu.brand_string", nullptr, &len, nullptr, 0);
+    std::string brand(len, '\0');
+    if (len > 0 && sysctlbyname("machdep.cpu.brand_string", brand.data(), &len, nullptr, 0) == 0) {
+        brand.resize(len - 1); // drop the trailing NUL
+    } else {
+        brand.clear();
+    }
+    cpu[keys::cpu::model] = brand;
+#else
     cpu[keys::cpu::vendor] = CPUIdent::Vendor();
     cpu[keys::cpu::model] = CPUIdent::Brand();
+#endif
     cpu[keys::cpu::numCores] = std::thread::hardware_concurrency();
 
     _cpus.push_back(cpu);

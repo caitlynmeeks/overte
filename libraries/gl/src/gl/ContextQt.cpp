@@ -92,7 +92,12 @@ bool Context::makeCurrent() {
 #endif
         updateSwapchainMemoryCounter();
         bool result = _qglContext->makeCurrent(_window);
-        gl::initModuleGl();
+        if (result) {
+            // Only load the GL entry points with a current context; the loader needs one.
+            gl::initModuleGl();
+        } else {
+            qCWarning(glLogging) << "QOpenGLContext::makeCurrent failed";
+        }
         return result;
 #ifdef Q_OS_WIN
     }

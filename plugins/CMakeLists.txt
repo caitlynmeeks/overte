@@ -19,8 +19,11 @@ if (OVERTE_BUILD_CLIENT AND NOT ANDROID)
     add_subdirectory(${DIR})
   endif()
 
-  set(DIR "openxr")
-  add_subdirectory(${DIR})
+  # OpenXR has no macOS runtime and the plugin only supports Linux and Windows.
+  if (NOT APPLE)
+    set(DIR "openxr")
+    add_subdirectory(${DIR})
+  endif()
 
   set(DIR "hifiSdl2")
   add_subdirectory(${DIR})
